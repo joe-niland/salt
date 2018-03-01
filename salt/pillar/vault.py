@@ -10,9 +10,10 @@ Vault Pillar Module
 
 This module allows pillar data to be stored in Hashicorp Vault.
 
-Base configuration instructions are documented in the :ref:`execution module docs <vault-setup>`.
-Below are noted extra configuration required for the pillar module, but the base
-configuration must also be completed.
+Base configuration instructions are documented in the :ref:`execution module
+docs <vault-setup>`.
+Below are noted extra configuration required for the pillar module, but the
+base configuration must also be completed.
 
 After the base Vault configuration is created, add the configuration below to
 the ext_pillar section in the Salt master configuration.
@@ -78,15 +79,31 @@ def ext_pillar(minion_id,  # pylint: disable=W0613
     comps = conf.split()
 
     if not comps[0].startswith('path='):
-        salt.utils.versions.warn_until(
+        salt.utils.warn_until(
             'Fluorine',
             'The \'profile\' argument has been deprecated. Any parts up until '
             'and following the first "path=" are discarded'
         )
+
     paths = [comp for comp in comps if comp.startswith('path=')]
     if not paths:
-        log.error('"%s" is not a valid Vault ext_pillar config', conf)
+        log.error('"%s" is not a valid Vault ext_pillar config. Path must be specified.', conf)
         return {}
+
+    # Filter minions by match criteria
+    targets = [comp for comp in comps if comp.startswith('target=')]
+    if targets:
+        target = targets[0].replace('target=', '')
+        target_types = [comp for comp in comps if comp.startswith('target_type=')]
+        if not target_types:
+            target_type = 'glob'
+        else:
+            target_type = target_types[0].replace('target_type=', '')
+        ckminions = salt.utils.minions.CkMinions(__opts__)
+        if minion_id not in ckminions.check_minions(target, target_type):
+            log.debug('Target "%s" "%s" did not match minion "%s"',
+                      target, target_type, minion_id)
+            return {}
 
     try:
         path = paths[0].replace('path=', '')
